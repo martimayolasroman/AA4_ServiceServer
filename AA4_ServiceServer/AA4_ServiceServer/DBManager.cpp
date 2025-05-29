@@ -14,6 +14,7 @@ bool DBManager::connectDataBase(const std::string& server, const std::string& us
 		driver = get_driver_instance();
 		con = driver->connect(server, usuari, contrasenya);
 		con->setSchema(baseDeDades);
+		isConnected = true;
 		std::cout << "DB -- Connection done. " << std::endl;
 
 

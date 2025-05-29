@@ -131,17 +131,27 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="AuthService.cpp" />
+    <ClCompile Include="ClientSession.cpp" />
     <ClCompile Include="DBManager.cpp" />
+    <ClCompile Include="LauncherService.cpp" />
     <ClCompile Include="Main.cpp" />
+    <ClCompile Include="MatchmakingService.cpp" />
     <ClCompile Include="PlayerInfo.cpp" />
     <ClCompile Include="Server.cpp" />
     <ClCompile Include="ServerTCP.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="AuthService.h" />
+    <ClInclude Include="ClientSession.h" />
     <ClInclude Include="DBManager.h" />
+    <ClInclude Include="LauncherService.h" />
+    <ClInclude Include="MatchmakingService.h" />
     <ClInclude Include="PlayerInfo.h" />
     <ClInclude Include="Server.h" />
+    <ClInclude Include="ServerConfig.h" />
     <ClInclude Include="ServerTCP.h" />
+    <ClInclude Include="Utils.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

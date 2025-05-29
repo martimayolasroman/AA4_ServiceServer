@@ -25,10 +25,12 @@ public:
 	bool userExist(const std::string& nickname);
 	bool registerUser(const std::string& nickname, const std::string& password);
 	bool validateUser(const std::string& nickname, const std::string& password);
+	bool isConnected = false;
 
 private:
 
 	sql::Driver* driver;
 	sql::Connection* con;
+	
 };
 

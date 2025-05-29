@@ -4,7 +4,12 @@ ServerTCP::ServerTCP(unsigned short port) :listenPort(port), running(false)
 {
 }
 
-bool ServerTCP::start()
+ServerTCP::~ServerTCP()
+{
+	stopListener();
+}
+
+bool ServerTCP::startListener()
 {
 	if (listener.listen(listenPort) != sf::Socket::Status::Done) {
 		std::cerr << "Error: No s'ha pogut escoltar al port " << listenPort << std::endl;
@@ -17,23 +22,66 @@ bool ServerTCP::start()
 	return true;
 }
 
-void ServerTCP::stop()
+void ServerTCP::stopListener()
 {
+	if (!running) return;
 	running = false;
 	listener.close();
+	selector.clear();
+	for (sf::TcpSocket* client : clients) {
+		delete client; // Liberar memoria
+	}
 	clients.clear();
+	std::cout << "Servidor TCP aturat del port " << listenPort << std::endl;
 }
 
 void ServerTCP::update()
 {
-	if (selector.wait()) {
-		if (selector.isReady(listener)) {
-			acceptNewClient();
-		}
+    if (!running) return;
 
+    if (selector.wait()) { 
+        // 1. Comprobar el listener para nuevas conexiones
+        if (selector.isReady(listener)) {
+             std::cout << "Listener is ready, accepting new client." << std::endl; 
+            acceptNewClient(); // acceptNewClient llamará a onClientConnected
+        }
 
-	}
+        
+        std::list<sf::TcpSocket*> clients_copy = clients; 
+
+        for (sf::TcpSocket* client : clients_copy) {
+            
+            bool stillConnected = false;
+            for (sf::TcpSocket* originalClient : clients) {
+                if (originalClient == client) {
+                    stillConnected = true;
+                    break;
+                }
+            }
+            if (!stillConnected) {
+                continue; // El cliente fue removido, pasar al siguiente
+            }
+
+            if (selector.isReady(*client)) {
+                sf::Packet packet;
+                sf::Socket::Status status = client->receive(packet);
+
+                if (status == sf::Socket::Status::Done) {
+                   
+                    if (onPacketReceived) { 
+                        onPacketReceived(client, packet);
+                    }
+                }
+                else if (status == sf::Socket::Status::Disconnected) {
+                    std::cout << "Client disconnected: " << client->getRemoteAddress().value() << ":" << client->getRemotePort() << " from service port " << listenPort << std::endl;
+                    removeClient(client); 
+                }
+               
+            }
+        }
+    }
 }
+
 
 bool ServerTCP::sendToClient(sf::TcpSocket* client, sf::Packet& packet)
 {
@@ -45,17 +93,17 @@ bool ServerTCP::sendToClient(sf::TcpSocket* client, sf::Packet& packet)
 
 
 
-std::vector<sf::TcpSocket*> ServerTCP::getConnectedClients()
-{
-	std::vector<sf::TcpSocket*> list;
-	std::unordered_map<sf::TcpSocket*, sf::TcpSocket*>::iterator it;
-
-	for (it = clients.begin(); it != clients.end(); it++) {
-		list.push_back(it->first);
-	}
-
-	return list;
-}
+//std::vector<sf::TcpSocket*> ServerTCP::getConnectedClients()
+//{
+//	std::vector<sf::TcpSocket*> list;
+//	std::unordered_map<sf::TcpSocket*, sf::TcpSocket*>::iterator it;
+//
+//	for (it = clients.begin(); it != clients.end(); it++) {
+//		list.push_back(it->first);
+//	}
+//
+//	return list;
+//}
 
 
 
@@ -67,15 +115,33 @@ void ServerTCP::acceptNewClient()
 
 
 	if (listener.accept(*newClient) == sf::Socket::Status::Done) {
-		newClient->setBlocking(false);
-		selector.add(*newClient);
 
-		clients[newClient] = newClient;
+		clients.push_back(newClient);
+		selector.add(*newClient);
+		newClient->setBlocking(false);
 		std::cout << "Nou client connectat desde: " << newClient->getRemoteAddress().value() << std::endl;
+
+		if (onClientConnected) {
+			onClientConnected(newClient);
+		}
 	}
 	else {
 		delete newClient;
+		std::cerr << "Error acceptant nou client al servei del port " << listenPort << std::endl;
 	}
+}
+
+void ServerTCP::removeClient(sf::TcpSocket* client, bool notify)
+{
+
+	if (notify && onClientDisconnected) {
+		onClientDisconnected(client);
+	}
+	selector.remove(*client);
+	clients.remove(client); 
+	delete client; // Liberar memoria
+
+
 }
 
 

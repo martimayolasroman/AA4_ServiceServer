@@ -1,46 +1,71 @@
 #pragma once
 
-#include<unordered_map>
-#include "PlayerInfo.h"
-#include "ServerTCP.h"
+#pragma once
+#include "ServerTCP.h"      
 #include "DBManager.h"
-
-
-#define SERVER "127.0.0.1:3306"
-#define USERNAME "root"
-#define PASSWORD "1234"
-#define DATABASE "DuckGameDB"
-
+#include "ClientSession.h"
+#include "Utils.h"
+#include "ServerConfig.h"        
+#include <unordered_map>
+#include <list>
+#include <atomic>
+#include <thread>
+#include <mutex> // Para proteger la cola de matchmaking
+#include <fstream> // Para leer el mapa
+#include <vector>  // Para leer el mapa
+#include "LauncherService.h"
+#include "MatchmakingService.h"
+#include "AuthService.h"
 
 class Server
 {
 
 public: 
 
-	Server(unsigned short port);
+	Server(const ServerConfig& config);
+	~Server();
+
 	void run();
+	void stop();
 
 private:
 
+	void handleClientConnected(sf::TcpSocket* clientSocket);
+	void handleClientDisconnected(sf::TcpSocket* clientSocket);
 	void processPacket(sf::TcpSocket* client, sf::Packet& packet);
-	void handleDisconnection(sf::TcpSocket* client);
+
+
+	
+
+	// Matchmaking
+	void matchmakingThreadLoop(); // Bucle para el thread de matchmaking
+	void checkQueueAndFormMatches(); // Lógica real de emparejamiento
+
+	
 
 	ServerTCP serverTCP;
 	DBManager dbManager;
+	ServerConfig serverConfig;
 
-	std::unordered_map<sf::TcpSocket*, PlayerInfo> connectedPlayers;//Map per asociar clients amb els seus nicknames
-	void mostrarJugadorsConnectats();
-	bool running = true;
+	// Módulos de Lógica
+	LauncherService launcher;
+	AuthService auth;
+	MatchmakingService matchmaking;
+
+	std::unordered_map<sf::TcpSocket*, ClientSession> clientSessions;
+	std::mutex sessionsMutex; // Para proteger clientSessions
 
 
-	void ReceiveLogin(sf::Packet data, sf::TcpSocket* client);
-	void ReceiveRegister(sf::Packet data, sf::TcpSocket* client);
+	// Matchmaking Queue
+	std::list<sf::TcpSocket*> matchmakingQueue; // Almacena sockets de clientes en cola
+	std::mutex matchmakingMutex; // Para proteger matchmakingQueue
+	std::thread mmThread; // Thread para el matchmaking
+
+	std::atomic<bool> matchmaking_running_flag;
+	std::atomic<bool> server_running_flag;
 
 
-	//void ReceiveCreateRoom(sf::Packet data, sf::TcpSocket* client);
-	//void ReceiveJoinRoom(sf::Packet data, sf::TcpSocket* client);
-	//void showPlayersInLobby(std::string& roomId);
-	//void startGame(Room* room);
+
 
 
 };
