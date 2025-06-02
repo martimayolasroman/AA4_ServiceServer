@@ -20,7 +20,9 @@ enum  PacketType
     S_MATCH_FOUND = 106, 
     S_ERROR_GENERAL = 107, // Para errores genéricos
 
-   
+   //Servidor(s) a servidor(d)
+    NOTIFY_NEW_GAME= 200,
+
     UNKNOWN = 255
 };
 

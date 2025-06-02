@@ -18,6 +18,7 @@ struct ServerConfig {
     // Matchmaking
     std::string gameServerIp = "127.0.0.1";
     unsigned short gameServerDefaultPort = 56000;
+    unsigned short gameServerDefaultPortTCPAdmin = 56001;
     float matchmakingCheckInterval = 2.0f; // Segundos
 
     // Podrías añadir un método para cargar desde archivo aquí

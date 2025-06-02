@@ -6,7 +6,8 @@
 #include "Utils.h"
 #include "ServerTCP.h"
 #include "ServerConfig.h" // Para gameServerIp y port
-
+#include <random> // Para generar IDs de sala si es necesario
+#include <sstream> // Para generar IDs de sala
 
 
 class MatchmakingService
@@ -33,7 +34,7 @@ private:
     std::list<sf::TcpSocket*> matchmakingQueue; // Almacena punteros a sockets
     std::mutex queueMutex; // Protege matchmakingQueue
     const ServerConfig& config; // Referencia a la configuración del servidor
-
+    sf::TcpSocket dedicated_server_admin_socket;
 
 };
 
