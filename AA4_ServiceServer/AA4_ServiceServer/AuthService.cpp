@@ -7,6 +7,15 @@ AuthService::AuthService(DBManager& databaseManager) : dbManager(databaseManager
 
 }
 
+
+
+
+// Procesa la petición de login o registro.
+// 'packet_type' es el tipo ya extraído (C_REQUEST_LOGIN o C_REQUEST_REGISTER).
+// 'packet_data' es el paquete SFML del cual extraer nickname y password.
+// Actualiza session.state y session.playerInfo en caso de éxito.
+// Envía la respuesta al cliente usando tcpLayer.
+
 void AuthService::processAuthenticationRequest(PacketType packet_type, sf::Packet& packet_data, 
     ClientSession& session, ServerTCP& tcpLayer)
 {
@@ -24,8 +33,7 @@ void AuthService::processAuthenticationRequest(PacketType packet_type, sf::Packe
             session.playerInfo.setConnected(true); // Marcar como conectado en PlayerInfo
             session.state = ClientState::LOGGED_IN;
             responsePacket << S_LOGIN_OK;
-            // Podrías añadir un ID de sesión único aquí si lo necesitaras
-            // responsePacket << generateSessionId();
+           
             authSuccess = true;
         }
         else {

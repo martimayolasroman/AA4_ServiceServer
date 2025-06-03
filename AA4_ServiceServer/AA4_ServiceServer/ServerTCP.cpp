@@ -9,6 +9,7 @@ ServerTCP::~ServerTCP()
 	stopListener();
 }
 
+// Inicia el listener TCP y configura el SocketSelector
 bool ServerTCP::startListener()
 {
 	if (listener.listen(listenPort) != sf::Socket::Status::Done) {
@@ -16,18 +17,20 @@ bool ServerTCP::startListener()
 		return false;
 	}
 
-	selector.add(listener);
+	selector.add(listener); // Añade el listener al selector
 	running = true;
 	std::cout << "Servidor escoltant al port " << listenPort << std::endl;
 	return true;
 }
 
+
+// Cierra el listener y borra todos los clientes
 void ServerTCP::stopListener()
 {
 	if (!running) return;
 	running = false;
-	listener.close();
-	selector.clear();
+	listener.close();	// Deja de escuchar
+	selector.clear();	// Limpia el SocketSelector
 	for (sf::TcpSocket* client : clients) {
 		delete client; // Liberar memoria
 	}
@@ -35,20 +38,26 @@ void ServerTCP::stopListener()
 	std::cout << "Servidor TCP aturat del port " << listenPort << std::endl;
 }
 
+
+// Este método se llama en bucle desde Server::run()
+// Atiende nuevas conexiones y paquetes entrantes
 void ServerTCP::update()
 {
     if (!running) return;
 
+
+	// Espera a que haya actividad en cualquiera de los sockets
     if (selector.wait()) { 
-        // 1. Comprobar el listener para nuevas conexiones
+		// 1.	Si listener está listo, hay una nueva conexión pendiente
         if (selector.isReady(listener)) {
              std::cout << "Listener is ready, accepting new client." << std::endl; 
-            acceptNewClient(); // acceptNewClient llamará a onClientConnected
+            acceptNewClient(); // // Acepta y notifica vía callback
         }
 
-        
+		// 2.	Copiamos la lista de clientes para iterar con seguridad
         std::list<sf::TcpSocket*> clients_copy = clients; 
 
+		// Recorremos cada cliente: si está listo (disponible en selector), recibimos paquete
         for (sf::TcpSocket* client : clients_copy) {
             
             bool stillConnected = false;
@@ -66,6 +75,7 @@ void ServerTCP::update()
                 sf::Packet packet;
                 sf::Socket::Status status = client->receive(packet);
 
+				// Llama al callback asignado en Server::run()
                 if (status == sf::Socket::Status::Done) {
                    
                     if (onPacketReceived) { 
@@ -74,7 +84,7 @@ void ServerTCP::update()
                 }
                 else if (status == sf::Socket::Status::Disconnected) {
                     std::cout << "Client disconnected: " << client->getRemoteAddress().value() << ":" << client->getRemotePort() << " from service port " << listenPort << std::endl;
-                    removeClient(client); 
+                    removeClient(client); // Remueve al cliente y llama a onClientDisconnected
                 }
                
             }
@@ -82,7 +92,7 @@ void ServerTCP::update()
     }
 }
 
-
+// Envía un sf::Packet al cliente, devuelve true si OK
 bool ServerTCP::sendToClient(sf::TcpSocket* client, sf::Packet& packet)
 {
 	if (client->send(packet) == sf::Socket::Status::Done) {
@@ -106,7 +116,7 @@ bool ServerTCP::sendToClient(sf::TcpSocket* client, sf::Packet& packet)
 //}
 
 
-
+// Acepta una nueva conexión TCP entrante
 void ServerTCP::acceptNewClient()
 {
 
@@ -120,7 +130,7 @@ void ServerTCP::acceptNewClient()
 		selector.add(*newClient);
 		newClient->setBlocking(false);
 		std::cout << "Nou client connectat desde: " << newClient->getRemoteAddress().value() << std::endl;
-
+		// Notifica a quien haya registrado onClientConnected
 		if (onClientConnected) {
 			onClientConnected(newClient);
 		}
@@ -131,6 +141,7 @@ void ServerTCP::acceptNewClient()
 	}
 }
 
+// Elimina un cliente (puede notificar a través de onClientDisconnected)
 void ServerTCP::removeClient(sf::TcpSocket* client, bool notify)
 {
 

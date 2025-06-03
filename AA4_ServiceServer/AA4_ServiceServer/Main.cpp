@@ -10,24 +10,26 @@
 #include "Server.h"
 
 
-
+// Flag global que controla cuándo detener todo el servidor
 std::atomic<bool> global_server_running_flag(true);
 
 
 
 int main() {
 
+	// Cargar la configuración (puertos, rutas, IPs, etc.)
 	ServerConfig config;
 	Server server(config);
 	std::cout << "Servidor  iniciado en el puerto: " << config.ServerPort << std::endl;
-	
+
+	// Arranca el servidor en un hilo separado para no bloquear la consola principal.
 	std::thread serverThread(&Server::run, &server);
 	std::cout << "[Main] Server::run() iniciado en un thread separado." << std::endl;
 
-	std::cout << "\n[Main] Servidor Unificado en ejecución." << std::endl;
-	std::cout << "Escribe 'exit'  y presiona ENTER para detener el servidor." << std::endl;
+	std::cout << "\n[Main] Servidor servicios en ejecución." << std::endl;
+	std::cout << "Escribe 'exit' y presiona ENTER para detener el servidor." << std::endl;
 
-
+	// Bucle principal del proceso "main": solo lee comandos de consola.
 	std::string command;
 	while (global_server_running_flag){
 
@@ -50,6 +52,7 @@ int main() {
 	}
     
 	std::cout << "\n[Main] Iniciando proceso de detención del servidor..." << std::endl;
+	// Llama a Server::stop() para cerrar listener y notificar al hilo interno.
 	server.stop();
 	// Esperar a que el thread del servidor termine su ejecución.
 	if (serverThread.joinable()) {

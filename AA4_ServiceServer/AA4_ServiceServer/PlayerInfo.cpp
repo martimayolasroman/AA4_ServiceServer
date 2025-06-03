@@ -37,14 +37,14 @@ bool PlayerInfo::isConnected() const
 	return connected;
 }
 
-void PlayerInfo::setRoomId(const std::string& _roomId)
-{
-	roomId = _roomId;
-}
-
-const std::string PlayerInfo::getRoomId()
-{
-	return roomId;
-}
+//void PlayerInfo::setRoomId(const std::string& _roomId)
+//{
+//	roomId = _roomId;
+//}
+//
+//const std::string PlayerInfo::getRoomId()
+//{
+//	return roomId;
+//}
 
 

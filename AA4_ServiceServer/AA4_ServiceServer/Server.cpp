@@ -6,7 +6,7 @@
 
 
 Server::Server(const ServerConfig& config): serverTCP(config.ServerPort),
-dbManager(), // Se inicializa por defecto, luego se conecta
+dbManager(),						// Inicializa DBManager
 serverConfig(config),
 launcher(config.mapFilePath),        // Inicializa LauncherLogic
 auth(dbManager),                     // Inicializa AuthLogic pasando dbManager
@@ -34,6 +34,7 @@ void Server::run()
 	}
 
 
+	// 3. Registramos callbacks para el layer TCP
 	serverTCP.setOnClientConnected([this](sf::TcpSocket* client) {
 		this->handleClientConnected(client);
 		});
@@ -45,7 +46,7 @@ void Server::run()
 		this->processPacket(client, packet);
 		});
 
-
+	// 4. Iniciamos el listener TCP
 	if (!serverTCP.startListener()) {
 		std::cerr << "[UnifiedServer] No s'ha pogut iniciar el listener al port " << serverTCP.getPort() << std::endl;
 		return;
@@ -53,24 +54,25 @@ void Server::run()
 	server_running_flag = true;
 	matchmaking_running_flag = true;
 
+	// 5. Arrancamos el hilo de matchmaking
 	mmThread = std::thread(&Server::matchmakingThreadLoop, this);
 
 	std::cout << "[UnifiedServer] Iniciat al port " << serverTCP.getPort() << std::endl;
 
 
 	
-
+	// 6. Bucle principal : solo hace serverTCP.update()
 	while (server_running_flag) {
 		
 		serverTCP.update();
 		
 	}
 
-	// Detener el listener antes de esperar a los threads para evitar nuevas conexiones/paquetes
+	// 7. Cuando se sale del bucle, paramos el listener TCP para no aceptar más clientes
 	serverTCP.stopListener();
 	std::cout << "[UnifiedServer] Listener TCP detingut." << std::endl;
 
-	// La detención del thread de matchmaking se maneja en stop()
+	// 8. El join() del thread de matchmaking se hace en stop()
 
 }
 
@@ -83,6 +85,7 @@ void Server::stop()
 	server_running_flag = false; // Señal para el bucle principal
 	matchmaking_running_flag = false; // Señal para el thread de matchmaking
 
+	// Si el hilo de matchmaking sigue vivo, lo unimos
 	if (mmThread.joinable()) {
 		std::cout << "[UnifiedServer] Esperant que el thread de matchmaking finalitzi..." << std::endl;
 		mmThread.join();
@@ -92,12 +95,15 @@ void Server::stop()
 	std::cout << "[UnifiedServer] Procés de parada completat." << std::endl;
 }
 
+
+// Cuando un cliente TCP se conecta, crea su sesión y le envía el mapa
 void Server::handleClientConnected(sf::TcpSocket* clientSocket)
 {
 
 	std::cout << "[UnifiedServer] Client connectat: " << clientSocket->getRemoteAddress().value() << ":" << clientSocket->getRemotePort() << std::endl;
 	ClientSession* session_ptr = nullptr;
 	{
+		// Bloqueamos el mapa de sesiones mientras insertamos la nueva
 		std::lock_guard<std::mutex> lock(sessionsMutex);
 		// Emplace devuelve un par (iterador, bool). Usamos el iterador para obtener la referencia.
 		auto result = clientSessions.emplace(std::piecewise_construct,
@@ -109,7 +115,7 @@ void Server::handleClientConnected(sf::TcpSocket* clientSocket)
 	if (session_ptr) {
 		// Fase de Launcher: Enviar mapa inmediatamente
 		launcher.sendMapToClient(*session_ptr, serverTCP);
-		// El estado del cliente se actualiza dentro de sendMapToClient
+		// LauncherService internamente cambiará el estado de la sesión a AWAITING_CREDENTIALS
 	}
 	else {
 		std::cerr << "[UnifiedServer] Error crític: No s'ha pogut crear la sessió del client." << std::endl;
@@ -118,24 +124,23 @@ void Server::handleClientConnected(sf::TcpSocket* clientSocket)
 
 }
 
+// Cuando un cliente TCP se desconecta, lo eliminamos de nuestras estructuras
 void Server::handleClientDisconnected(sf::TcpSocket* clientSocket)
 {
 	std::cout << "[UnifiedServer] Client desconnectat: " << clientSocket->getRemoteAddress().value() << ":" << clientSocket->getRemotePort() << std::endl;
-	// Eliminar de la cola de matchmaking si estaba allí
-	// (MatchmakingLogic ahora gestiona su propia cola, así que esta lógica específica se mueve allí
-	// o se llama a un método de MatchmakingLogic para limpiar)
-	// Para simplificar, y dado que MatchmakingLogic::formMatches itera sobre su propia cola,
-	// solo necesitamos eliminar la sesión del servidor.
-
-	// Si MatchmakingLogic necesitara ser notificada, harías algo como:
-	// matchmaking.handleClientDisconnected(clientSocket);
+	
 
 	{
 		std::lock_guard<std::mutex> lock(sessionsMutex);
 		clientSessions.erase(clientSocket);
 	}
+
+	// Si el cliente estuviera en la cola de matchmaking, MatchmakingService se encarga
+  // de limpiarlo en su próximo formMatches
 }
 
+
+// Procesa paquetes entrantes de clientes TCP según su estado
 void Server::processPacket(sf::TcpSocket* client, sf::Packet& packet)
 {
 
@@ -143,6 +148,8 @@ void Server::processPacket(sf::TcpSocket* client, sf::Packet& packet)
 
 	ClientSession* session_ptr = nullptr;
 	{
+
+		// Buscamos la sesión asociada al socket
 		std::lock_guard<std::mutex> lock(sessionsMutex);
 		auto it = clientSessions.find(client);
 		if (it == clientSessions.end()) {
@@ -167,13 +174,13 @@ void Server::processPacket(sf::TcpSocket* client, sf::Packet& packet)
 		}
 		else {
 			std::cerr << "[UnifiedServer] Paquet inesperat  per a l'estat AWAITING_CREDENTIALS de " << session_ptr->ipAddress.toString() << std::endl;
-			// Enviar error al cliente? Desconectarlo?
+			
 		}
 		break;
 
 	case ClientState::LOGGED_IN:
 		if (type == C_REQUEST_MATCHMAKING_FRIENDLY) {
-			// El paquete para C_REQUEST_MATCHMAKING_FRIENDLY podría no tener más datos después del tipo.
+			
 			matchmaking.addClientToQueue(*session_ptr, serverTCP);
 		}
 		else {
@@ -181,20 +188,21 @@ void Server::processPacket(sf::TcpSocket* client, sf::Packet& packet)
 		}
 		break;
 
-		// case ClientState::AWAITING_MAP_ACK:
-		//     // ...
-		//     break;
+		
 
 	default:
 		std::cerr << "[UnifiedServer] Paquet rebut en un estat inesperat del client ("
-			<< static_cast<int>(session_ptr->state) << ") Nick: " << (session_ptr->playerInfo.getNickName().empty() ? "N/A" : session_ptr->playerInfo.getNickName())
-			<< std::endl;
+			<< static_cast<int>(session_ptr->state) << ") Nick: " <<  session_ptr->playerInfo.getNickName() << std::endl;
+			
 		break;
 	}
 
 
 }
 
+
+
+// Bucle que se ejecuta en hilo separado para buscar parejas en la cola
 void Server::matchmakingThreadLoop()
 {
 	std::cout << "[UnifiedServer-MatchmakingThread] Iniciat." << std::endl;
@@ -209,13 +217,10 @@ void Server::matchmakingThreadLoop()
 			matchmaking.formMatches(clientSessions, sessionsMutex, serverTCP);
 			checkClock.restart();
 		}
-		//std::this_thread::sleep_for(sf::milliseconds(200)); // Evitar uso excesivo de CPU
+		
 	}
 	std::cout << "[UnifiedServer-MatchmakingThread] Aturat." << std::endl;
 }
 
-void Server::checkQueueAndFormMatches()
-{
 
-}
 
