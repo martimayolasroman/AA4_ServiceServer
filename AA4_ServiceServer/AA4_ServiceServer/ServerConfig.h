@@ -21,6 +21,5 @@ struct ServerConfig {
     unsigned short gameServerDefaultPortTCPAdmin = 56001;
     float matchmakingCheckInterval = 2.0f; // Segundos
 
-    // Podrías añadir un método para cargar desde archivo aquí
-    // bool loadFromFile(const std::string& filename);
+   
 };

@@ -3,11 +3,11 @@
 
 
 PlayerInfo::PlayerInfo(const std::string& nickname, const sf::IpAddress& ip, unsigned short port)
-	:nickname(nickname), ip(ip), port(port), connected(true), roomId("")
+	:nickname(nickname), ip(ip), port(port), connected(true) 
 {
 }
 
-PlayerInfo::PlayerInfo() :nickname(""), ip(sf::IpAddress(0, 0, 0, 0)), port(0), connected(false), roomId("")
+PlayerInfo::PlayerInfo() :nickname(""), ip(sf::IpAddress(0, 0, 0, 0)), port(0), connected(false) 
 {
 
 }
@@ -37,14 +37,14 @@ bool PlayerInfo::isConnected() const
 	return connected;
 }
 
-void PlayerInfo::setRoomId(const std::string& _roomId)
-{
-	roomId = _roomId;
-}
-
-const std::string PlayerInfo::getRoomId()
-{
-	return roomId;
-}
+//void PlayerInfo::setRoomId(const std::string& _roomId)
+//{
+//	roomId = _roomId;
+//}
+//
+//const std::string PlayerInfo::getRoomId()
+//{
+//	return roomId;
+//}
 
 

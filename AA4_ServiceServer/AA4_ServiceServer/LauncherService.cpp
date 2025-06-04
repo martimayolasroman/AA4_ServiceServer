@@ -8,6 +8,8 @@ LauncherService::LauncherService(const std::string& path) : mapFilePath(path)
 
 void LauncherService::sendMapToClient(ClientSession& session, ServerTCP& tcpLayer)
 {
+
+    // Lee el archivo de mapa completo en memoria
     std::ifstream mapFile(mapFilePath, std::ios::binary);
     if (!mapFile.is_open()) {
         std::cerr << "[LauncherLogic] Error: No se pudo abrir el archivo del mapa: " << mapFilePath << std::endl;
@@ -19,9 +21,12 @@ void LauncherService::sendMapToClient(ClientSession& session, ServerTCP& tcpLaye
         return;
     }
 
+    // Lee todo el contenido como una cadena
     std::string mapContent((std::istreambuf_iterator<char>(mapFile)), std::istreambuf_iterator<char>());
     mapFile.close();
 
+
+    // Prepara paquete: primero tipo S_MAP_DATA, luego todo el contenido del mapa
     sf::Packet mapPacket;
     mapPacket << PacketType::S_MAP_DATA;
     mapPacket << mapContent;

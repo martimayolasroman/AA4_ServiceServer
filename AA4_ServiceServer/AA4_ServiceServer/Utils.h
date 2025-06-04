@@ -2,6 +2,8 @@
 #include <iostream>
 #include <SFML/Network.hpp>
 
+
+// Define todos los tipos de paquete usados tanto cliente-servidor como servidor-cliente
 enum  PacketType
 {
     // Cliente a Servidor
@@ -26,6 +28,8 @@ enum  PacketType
     UNKNOWN = 255
 };
 
+
+// Operators para leer / escribir PacketType directamente en sf::Packet
 
 inline sf::Packet& operator >> (sf::Packet& packet, PacketType& tipo) {
 

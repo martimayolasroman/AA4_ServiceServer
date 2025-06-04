@@ -73,7 +73,7 @@ void MatchmakingService::addClientToQueue(ClientSession& session, ServerTCP& tcp
         << " (" << session.ipAddress.toString() << ":" << session.port
         << ") solicita matchmaking." << std::endl;
 
-    // QUITAR envío de mapa
+    // QUITAR env�o de mapa
     // std::cout << "[MatchmakingLogic] Enviando mapa a " << session.playerInfo.getNickName() << std::endl;
     // launcher.sendMapToClient(session, tcpLayer);
 
@@ -81,6 +81,8 @@ void MatchmakingService::addClientToQueue(ClientSession& session, ServerTCP& tcp
     {
         std::lock_guard<std::mutex> lock(queueMutex);
         bool alreadyInQueue = false;
+
+        // Comprueba si el socket ya est� en la cola para evitar duplicados
         for (sf::TcpSocket* queuedSocket : matchmakingQueue) {
             if (queuedSocket == session.socket) {
                 alreadyInQueue = true;
@@ -88,6 +90,7 @@ void MatchmakingService::addClientToQueue(ClientSession& session, ServerTCP& tcp
             }
         }
 
+        
         if (!alreadyInQueue) {
             matchmakingQueue.push_back(session.socket);
             session.state = ClientState::IN_MATCHMAKING_QUEUE; // Actualizar estado AHORA
