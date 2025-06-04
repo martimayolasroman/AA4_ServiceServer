@@ -82,16 +82,28 @@ void ServerTCP::update()
     }
 }
 
+//
+//bool ServerTCP::sendToClient(sf::TcpSocket* client, sf::Packet& packet)
+//{
+//	if (client->send(packet) == sf::Socket::Status::Done) {
+//		return true;
+//	}
+//	return false;
+//}
 
-bool ServerTCP::sendToClient(sf::TcpSocket* client, sf::Packet& packet)
-{
-	if (client->send(packet) == sf::Socket::Status::Done) {
-		return true;
-	}
-	return false;
+bool ServerTCP::sendToClient(sf::TcpSocket* client, sf::Packet& packet) {
+    if (!client) return false; // Comprobación de seguridad
+    std::cout << "[ServerTCP DEBUG] Intentando enviar paquete al puerto cliente: " << client->getRemotePort() << std::endl;
+    sf::Socket::Status send_status = client->send(packet);
+    if (send_status == sf::Socket::Status::Done) {
+        std::cout << "[ServerTCP DEBUG] Envio al puerto " << client->getRemotePort() << " exitoso (Done)." << std::endl;
+        return true;
+    }
+    else {
+        std::cerr << "[ServerTCP DEBUG] Fallo al enviar al puerto " << client->getRemotePort() << ". Estado: " << static_cast<int>(send_status) << std::endl;
+        return false;
+    }
 }
-
-
 
 //std::vector<sf::TcpSocket*> ServerTCP::getConnectedClients()
 //{

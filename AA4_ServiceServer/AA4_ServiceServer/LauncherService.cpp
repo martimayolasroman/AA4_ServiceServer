@@ -28,7 +28,11 @@ void LauncherService::sendMapToClient(ClientSession& session, ServerTCP& tcpLaye
 
     if (tcpLayer.sendToClient(session.socket, mapPacket)) {
         std::cout << "[LauncherLogic] Mapa enviado a " << session.ipAddress.toString() << ":" << session.port << std::endl;
-        session.state = ClientState::AWAITING_CREDENTIALS; // Cliente listo para login/register
+        // QUITAR: session.state = ClientState::AWAITING_CREDENTIALS;
+        // El estado de la sesión se maneja fuera ahora, dependiendo de cuándo se llame a sendMapToClient.
+        // En el nuevo flujo, el estado ya es LOGGED_IN cuando se llama a esto.
+
+        //session.state = ClientState::AWAITING_CREDENTIALS; // Cliente listo para login/register
     }
     else {
         std::cerr << "[LauncherLogic] Error enviando mapa a " << session.ipAddress.toString() << ":" << session.port << std::endl;

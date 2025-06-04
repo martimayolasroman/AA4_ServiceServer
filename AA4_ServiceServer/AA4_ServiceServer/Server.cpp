@@ -1,221 +1,203 @@
 #include "Server.h"
+#include <iostream>
 
-
-
-
-
-
-Server::Server(const ServerConfig& config): serverTCP(config.ServerPort),
-dbManager(), // Se inicializa por defecto, luego se conecta
-serverConfig(config),
-launcher(config.mapFilePath),        // Inicializa LauncherLogic
-auth(dbManager),                     // Inicializa AuthLogic pasando dbManager
-matchmaking(config),                 // Inicializa MatchmakingLogic
-server_running_flag(false),
-matchmaking_running_flag(false)
-{
-	// Connexió a la base de dades
-	if (!dbManager.connectDataBase(config.dbHost, config.dbUser, config.dbPass, config.dbName)) {
-		std::cout << "[SERVER] No s'ha pogut connectar a la base de dades." << std::endl;
-	}
+Server::Server(const ServerConfig& config) :
+    serverTCP(config.ServerPort),
+    dbManager(),
+    serverConfig(config),
+    launcher(config.mapFilePath),  
+    auth(dbManager),
+    matchmaking(config),           
+    server_running_flag(false),
+    matchmaking_running_flag(false) {
+    if (!dbManager.connectDataBase(config.dbHost, config.dbUser, config.dbPass, config.dbName)) {
+        std::cerr << "[SERVER] No s'ha pogut connectar a la base de dades. El servidor podria no funcionar correctament." << std::endl;
+     }
 }
 
-Server::~Server()
-{
-	stop();
-	
+Server::~Server() {
+    stop();
 }
 
-void Server::run()
-{
-	if (!dbManager.isConnected) {
-		std::cerr << "[UnifiedServer] No es pot iniciar, la BBDD no està connectada." << std::endl;
-		return;
-	}
+void Server::run() {
+    if (!dbManager.isConnected) {
+        std::cerr << "[UnifiedServer] No es pot iniciar, la BBDD no esta connectada." << std::endl;
+        return;
+    }
 
+    serverTCP.setOnClientConnected([this](sf::TcpSocket* client) {
+        this->handleClientConnected(client);
+        });
+    serverTCP.setOnClientDisconnected([this](sf::TcpSocket* client) {
+        this->handleClientDisconnected(client);
+        });
+    serverTCP.setOnPacketReceived([this](sf::TcpSocket* client, sf::Packet& packet) {
+        this->processPacket(client, packet);
+        });
 
-	serverTCP.setOnClientConnected([this](sf::TcpSocket* client) {
-		this->handleClientConnected(client);
-		});
-	serverTCP.setOnClientDisconnected([this](sf::TcpSocket* client) {
-		this->handleClientDisconnected(client);
-		});
-	serverTCP.setOnPacketReceived([this](sf::TcpSocket* client, sf::Packet& packet) {
-		std::cout << "Callback packetreceived " << std::endl;
-		this->processPacket(client, packet);
-		});
+    if (!serverTCP.startListener()) {
+        std::cerr << "[UnifiedServer] No s'ha pogut iniciar el listener al port " << serverTCP.getPort() << std::endl;
+        return;
+    }
+    server_running_flag = true;
+    matchmaking_running_flag = true;
 
+    mmThread = std::thread(&Server::matchmakingThreadLoop, this);
+    std::cout << "[UnifiedServer] Iniciat al port " << serverTCP.getPort() << std::endl;
 
-	if (!serverTCP.startListener()) {
-		std::cerr << "[UnifiedServer] No s'ha pogut iniciar el listener al port " << serverTCP.getPort() << std::endl;
-		return;
-	}
-	server_running_flag = true;
-	matchmaking_running_flag = true;
+    while (server_running_flag) {
+        serverTCP.update();
+        // Pequeña pausa para no consumir 100% CPU si el update es muy rápido
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
 
-	mmThread = std::thread(&Server::matchmakingThreadLoop, this);
-
-	std::cout << "[UnifiedServer] Iniciat al port " << serverTCP.getPort() << std::endl;
-
-
-	
-
-	while (server_running_flag) {
-		
-		serverTCP.update();
-		
-	}
-
-	// Detener el listener antes de esperar a los threads para evitar nuevas conexiones/paquetes
-	serverTCP.stopListener();
-	std::cout << "[UnifiedServer] Listener TCP detingut." << std::endl;
-
-	// La detención del thread de matchmaking se maneja en stop()
-
+    serverTCP.stopListener();
+    std::cout << "[UnifiedServer] Listener TCP detingut." << std::endl;
 }
 
-void Server::stop()
-{
-	if (!server_running_flag && !matchmaking_running_flag) { // Ya se está deteniendo o detenido
-		return;
-	}
-	std::cout << "[UnifiedServer] Iniciant procés de parada..." << std::endl;
-	server_running_flag = false; // Señal para el bucle principal
-	matchmaking_running_flag = false; // Señal para el thread de matchmaking
+void Server::stop() {
+    if (!server_running_flag.exchange(false)) { // Prevenir múltiples llamadas a stop
+        if (!matchmaking_running_flag.load()) return; // Si matchmaking ya está detenido, salir
+    }
 
-	if (mmThread.joinable()) {
-		std::cout << "[UnifiedServer] Esperant que el thread de matchmaking finalitzi..." << std::endl;
-		mmThread.join();
-		std::cout << "[UnifiedServer] Thread de matchmaking finalitzat." << std::endl;
-	}
-	
-	std::cout << "[UnifiedServer] Procés de parada completat." << std::endl;
+    std::cout << "[UnifiedServer] Iniciant proces de parada..." << std::endl;
+    // server_running_flag ya está en false.
+    matchmaking_running_flag = false;
+
+    if (mmThread.joinable()) {
+        std::cout << "[UnifiedServer] Esperant que el thread de matchmaking finalitzi..." << std::endl;
+        mmThread.join();
+        std::cout << "[UnifiedServer] Thread de matchmaking finalitzat." << std::endl;
+    }
+
+ 
+
+     {
+        std::lock_guard<std::mutex> lock(sessionsMutex);
+        clientSessions.clear(); // Los ClientSession se destruirán, pero los sf::TcpSocket* no se borran aquí
+        // ServerTCP debería ser el dueño de los sockets y borrarlos.
+    }
+    if (dbManager.isConnected) {
+        dbManager.disconnectDB();
+    }
+    std::cout << "[UnifiedServer] Proces de parada completat." << std::endl;
 }
 
-void Server::handleClientConnected(sf::TcpSocket* clientSocket)
-{
+void Server::handleClientConnected(sf::TcpSocket* clientSocket) {
+    std::cout << "[UnifiedServer] Client connectat: " << clientSocket->getRemoteAddress().value_or(sf::IpAddress::Any).toString() << ":" << clientSocket->getRemotePort() << std::endl;
+    ClientSession* session_ptr = nullptr;
+    {
+        std::lock_guard<std::mutex> lock(sessionsMutex);
+        auto result = clientSessions.emplace(std::piecewise_construct,
+            std::forward_as_tuple(clientSocket),
+            std::forward_as_tuple(clientSocket));
+        session_ptr = &result.first->second;
+    }
 
-	std::cout << "[UnifiedServer] Client connectat: " << clientSocket->getRemoteAddress().value() << ":" << clientSocket->getRemotePort() << std::endl;
-	ClientSession* session_ptr = nullptr;
-	{
-		std::lock_guard<std::mutex> lock(sessionsMutex);
-		// Emplace devuelve un par (iterador, bool). Usamos el iterador para obtener la referencia.
-		auto result = clientSessions.emplace(std::piecewise_construct,
-			std::forward_as_tuple(clientSocket),
-			std::forward_as_tuple(clientSocket));
-		session_ptr = &result.first->second;
-	}
-
-	if (session_ptr) {
-		// Fase de Launcher: Enviar mapa inmediatamente
-		launcher.sendMapToClient(*session_ptr, serverTCP);
-		// El estado del cliente se actualiza dentro de sendMapToClient
-	}
-	else {
-		std::cerr << "[UnifiedServer] Error crític: No s'ha pogut crear la sessió del client." << std::endl;
-		clientSocket->disconnect();
-	}
-
+    if (session_ptr) {
+        // El cliente ahora está en ClientState::CONNECTED por defecto.
+        // Cambiamos a AWAITING_CREDENTIALS directamente. No se envía mapa aquí.
+        session_ptr->state = ClientState::AWAITING_CREDENTIALS;
+        std::cout << "[UnifiedServer] Client " << session_ptr->ipAddress.toString()
+            << " canviat a AWAITING_CREDENTIALS." << std::endl;
+    }
+    else {
+        std::cerr << "[UnifiedServer] Error critic: No s'ha pogut crear la sessio del client." << std::endl;
+        // ServerTCP debería manejar la desconexión y borrado del socket si la creación falla aquí
+        // o si nosotros mismos lo desconectamos.
+        clientSocket->disconnect();
+        // No borramos clientSocket aquí, ServerTCP lo hará en su limpieza si está en su lista.
+    }
 }
 
-void Server::handleClientDisconnected(sf::TcpSocket* clientSocket)
-{
-	std::cout << "[UnifiedServer] Client desconnectat: " << clientSocket->getRemoteAddress().value() << ":" << clientSocket->getRemotePort() << std::endl;
-	// Eliminar de la cola de matchmaking si estaba allí
-	// (MatchmakingLogic ahora gestiona su propia cola, así que esta lógica específica se mueve allí
-	// o se llama a un método de MatchmakingLogic para limpiar)
-	// Para simplificar, y dado que MatchmakingLogic::formMatches itera sobre su propia cola,
-	// solo necesitamos eliminar la sesión del servidor.
+void Server::handleClientDisconnected(sf::TcpSocket* clientSocket) {
+    std::cout << "[UnifiedServer] Client desconnectat: " << clientSocket->getRemoteAddress().value_or(sf::IpAddress::Any).toString() << ":" << clientSocket->getRemotePort() << std::endl;
+ 
 
-	// Si MatchmakingLogic necesitara ser notificada, harías algo como:
-	// matchmaking.handleClientDisconnected(clientSocket);
-
-	{
-		std::lock_guard<std::mutex> lock(sessionsMutex);
-		clientSessions.erase(clientSocket);
-	}
+    {
+        std::lock_guard<std::mutex> lock(sessionsMutex);
+        clientSessions.erase(clientSocket); // Elimina la sesión del mapa.
+    }
+    // El sf::TcpSocket* es borrado por ServerTCP cuando lo elimina de su lista de clientes.
 }
 
-void Server::processPacket(sf::TcpSocket* client, sf::Packet& packet)
-{
+void Server::processPacket(sf::TcpSocket* client, sf::Packet& packet) {
+    ClientSession* session_ptr = nullptr;
+    {
+        std::lock_guard<std::mutex> lock(sessionsMutex);
+        auto it = clientSessions.find(client);
+        if (it == clientSessions.end()) {
+            std::cerr << "[UnifiedServer] Paquet rebut d'un client desconegut (sessio no trobada)." << std::endl;
+            return;
+        }
+        session_ptr = &it->second;
+    }
 
-	std::cout << "Packet received from client" << std::endl;
-
-	ClientSession* session_ptr = nullptr;
-	{
-		std::lock_guard<std::mutex> lock(sessionsMutex);
-		auto it = clientSessions.find(client);
-		if (it == clientSessions.end()) {
-			std::cerr << "[UnifiedServer] Paquet rebut d'un client desconegut (sessió no trobada)." << std::endl;
-			return;
-		}
-		session_ptr = &it->second;
-	}
-
-
-	PacketType type;
-	 // Copia para extraer tipo sin afectar la original para los handlers
-	packet >> type;
+    PacketType type;
+ 
+    if (!(packet >> type)) { // Extraer tipo del paquete original
+        std::cerr << "[UnifiedServer] Error al extraer PacketType del paquete de " << session_ptr->ipAddress.toString() << std::endl;
+        return;
+    }
 
 
-	switch (session_ptr->state) {
+    // std::cout << "[UnifiedServer] Paquet rebut de " << session_ptr->ipAddress.toString()
+    //           << " Tipus: " << static_cast<int>(type)
+    //           << " Estat actual del client: " << static_cast<int>(session_ptr->state) << std::endl;
 
-	case ClientState::AWAITING_CREDENTIALS:
-		if (type == C_REQUEST_LOGIN || type == C_REQUEST_REGISTER) {
-			// Pasamos el 'packet' original que contiene el tipo + datos. AuthLogic extraerá.
-			auth.processAuthenticationRequest(type, packet, *session_ptr, serverTCP);
-		}
-		else {
-			std::cerr << "[UnifiedServer] Paquet inesperat  per a l'estat AWAITING_CREDENTIALS de " << session_ptr->ipAddress.toString() << std::endl;
-			// Enviar error al cliente? Desconectarlo?
-		}
-		break;
+    switch (session_ptr->state) {
+    case ClientState::AWAITING_CREDENTIALS:
+        if (type == C_REQUEST_LOGIN || type == C_REQUEST_REGISTER) {
+ 
+            auth.processAuthenticationRequest(type, packet, *session_ptr, serverTCP);
+        }
+        else {
+            std::cerr << "[UnifiedServer] Paquet inesperat (" << static_cast<int>(type)
+                << ") per a l'estat AWAITING_CREDENTIALS de " << session_ptr->ipAddress.toString() << std::endl;
+        }
+        break;
 
-	case ClientState::LOGGED_IN:
-		if (type == C_REQUEST_MATCHMAKING_FRIENDLY) {
-			// El paquete para C_REQUEST_MATCHMAKING_FRIENDLY podría no tener más datos después del tipo.
-			matchmaking.addClientToQueue(*session_ptr, serverTCP);
-		}
-		else {
-			std::cerr << "[UnifiedServer] Paquet inesperat  per a l'estat LOGGED_IN de " << session_ptr->playerInfo.getNickName() << std::endl;
-		}
-		break;
+    case ClientState::LOGGED_IN:
+        if (type == C_REQUEST_MATCHMAKING_FRIENDLY) {
+            // MatchmakingService se encargará de todo. No necesita más datos del paquete aquí.
+            matchmaking.addClientToQueue(*session_ptr, serverTCP);
+        }
+        else {
+            std::cerr << "[UnifiedServer] Paquet inesperat (" << static_cast<int>(type)
+                << ") per a l'estat LOGGED_IN de " << session_ptr->playerInfo.getNickName() << std::endl;
+        }
+        break;
 
-		// case ClientState::AWAITING_MAP_ACK:
-		//     // ...
-		//     break;
+    case ClientState::IN_MATCHMAKING_QUEUE:
+    case ClientState::MATCHED:
+        std::cout << "[UnifiedServer] Paquet rebut (" << static_cast<int>(type)
+            << ") de " << session_ptr->playerInfo.getNickName()
+            << " que esta en estat " << static_cast<int>(session_ptr->state)
+            << ". No s'esperen paquets TCP en aquest estat." << std::endl;
+        // No se esperan más paquetes TCP del cliente una vez está en cola o emparejado (para este servidor)
+        break;
 
-	default:
-		std::cerr << "[UnifiedServer] Paquet rebut en un estat inesperat del client ("
-			<< static_cast<int>(session_ptr->state) << ") Nick: " << (session_ptr->playerInfo.getNickName().empty() ? "N/A" : session_ptr->playerInfo.getNickName())
-			<< std::endl;
-		break;
-	}
-
-
+    default:
+        std::cerr << "[UnifiedServer] Paquet rebut (" << static_cast<int>(type)
+            << ") en un estat inesperat del client ("
+            << static_cast<int>(session_ptr->state) << ") Nick: "
+            << (session_ptr->playerInfo.getNickName().empty() ? "N/A" : session_ptr->playerInfo.getNickName())
+            << std::endl;
+        break;
+    }
 }
 
-void Server::matchmakingThreadLoop()
-{
-	std::cout << "[UnifiedServer-MatchmakingThread] Iniciat." << std::endl;
-	sf::Clock checkClock;
-	// Usar serverConfig para el intervalo
-	sf::Time checkInterval = sf::seconds(serverConfig.matchmakingCheckInterval);
+void Server::matchmakingThreadLoop() {
+    std::cout << "[UnifiedServer-MatchmakingThread] Iniciat." << std::endl;
+    sf::Clock checkClock;
+    sf::Time checkInterval = sf::seconds(serverConfig.matchmakingCheckInterval);
 
-	while (matchmaking_running_flag) {
-		if (checkClock.getElapsedTime() >= checkInterval) {
-			// Pasamos el mapa de sesiones y su mutex para que MatchmakingLogic pueda acceder a él
-			// de forma segura si necesita actualizar el estado de los clientes emparejados.
-			matchmaking.formMatches(clientSessions, sessionsMutex, serverTCP);
-			checkClock.restart();
-		}
-		//std::this_thread::sleep_for(sf::milliseconds(200)); // Evitar uso excesivo de CPU
-	}
-	std::cout << "[UnifiedServer-MatchmakingThread] Aturat." << std::endl;
+    while (matchmaking_running_flag) {
+        if (checkClock.getElapsedTime() >= checkInterval) {
+            matchmaking.formMatches(clientSessions, sessionsMutex, serverTCP);
+            checkClock.restart();
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(5)); // Evitar uso excesivo de CPU
+    }
+    std::cout << "[UnifiedServer-MatchmakingThread] Aturat." << std::endl;
 }
-
-void Server::checkQueueAndFormMatches()
-{
-
-}
-
