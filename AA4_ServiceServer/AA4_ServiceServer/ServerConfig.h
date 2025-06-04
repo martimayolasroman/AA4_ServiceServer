@@ -12,7 +12,7 @@ struct ServerConfig {
     std::string dbPass = "1234";
     std::string dbName = "DuckGameDB";
 
-    // Launcher
+    // Launchervis
     std::string mapFilePath = "Data/map.txt"; // Ruta relativa al ejecutable
 
     // Matchmaking
