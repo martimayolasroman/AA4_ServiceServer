@@ -74,8 +74,8 @@ void MatchmakingService::addClientToQueue(ClientSession& session, ServerTCP& tcp
         << ") solicita matchmaking." << std::endl;
 
     // QUITAR env�o de mapa
-    // std::cout << "[MatchmakingLogic] Enviando mapa a " << session.playerInfo.getNickName() << std::endl;
-    // launcher.sendMapToClient(session, tcpLayer);
+     //std::cout << "[MatchmakingLogic] Enviando mapa a " << session.playerInfo.getNickName() << std::endl;
+     //launcher.sendMapToClient(session, tcpLayer);
 
     bool added_to_actual_queue = false;
     {

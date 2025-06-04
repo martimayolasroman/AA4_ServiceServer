@@ -95,6 +95,9 @@ void Server::handleClientConnected(sf::TcpSocket* clientSocket) {
     }
 
     if (session_ptr) {
+        
+       // std::cout << "[MatchmakingLogic] Enviando mapa a " << session.playerInfo.getNickName() << std::endl;
+        launcher.sendMapToClient(*session_ptr, serverTCP);
         // El cliente ahora está en ClientState::CONNECTED por defecto.
         // Cambiamos a AWAITING_CREDENTIALS directamente. No se envía mapa aquí.
         session_ptr->state = ClientState::AWAITING_CREDENTIALS;

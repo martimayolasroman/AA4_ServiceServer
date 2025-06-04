@@ -28,11 +28,14 @@ void LauncherService::sendMapToClient(ClientSession& session, ServerTCP& tcpLaye
 
     // Prepara paquete: primero tipo S_MAP_DATA, luego todo el contenido del mapa
     sf::Packet mapPacket;
-    mapPacket << PacketType::S_MAP_DATA;
+    mapPacket << S_MAP_DATA;
     mapPacket << mapContent;
+
+    //std::cout << mapContent << std::endl;
 
     if (tcpLayer.sendToClient(session.socket, mapPacket)) {
         std::cout << "[LauncherLogic] Mapa enviado a " << session.ipAddress.toString() << ":" << session.port << std::endl;
+        std::cout << "[DEBUG] Contingut del mapa: " << mapContent << std::endl;
         // QUITAR: session.state = ClientState::AWAITING_CREDENTIALS;
         // El estado de la sesión se maneja fuera ahora, dependiendo de cuándo se llame a sendMapToClient.
         // En el nuevo flujo, el estado ya es LOGGED_IN cuando se llama a esto.
