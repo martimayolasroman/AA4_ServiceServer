@@ -92,15 +92,8 @@ void ServerTCP::update()
     }
 }
 
-//
-//bool ServerTCP::sendToClient(sf::TcpSocket* client, sf::Packet& packet)
-//{
-//	if (client->send(packet) == sf::Socket::Status::Done) {
-//		return true;
-//	}
-//	return false;
-//}
 
+//Envía un sf::Packet a un cliente específico.
 bool ServerTCP::sendToClient(sf::TcpSocket* client, sf::Packet& packet) {
     if (!client) return false; // Comprobación de seguridad
     std::cout << "[ServerTCP DEBUG] Intentando enviar paquete al puerto cliente: " << client->getRemotePort() << std::endl;
@@ -115,17 +108,7 @@ bool ServerTCP::sendToClient(sf::TcpSocket* client, sf::Packet& packet) {
     }
 }
 
-//std::vector<sf::TcpSocket*> ServerTCP::getConnectedClients()
-//{
-//	std::vector<sf::TcpSocket*> list;
-//	std::unordered_map<sf::TcpSocket*, sf::TcpSocket*>::iterator it;
-//
-//	for (it = clients.begin(); it != clients.end(); it++) {
-//		list.push_back(it->first);
-//	}
-//
-//	return list;
-//}
+
 
 
 // Acepta una nueva conexión TCP entrante
@@ -153,7 +136,7 @@ void ServerTCP::acceptNewClient()
 	}
 }
 
-// Elimina un cliente (puede notificar a través de onClientDisconnected)
+//Elimina un cliente de la gestión de ServerTCP.
 void ServerTCP::removeClient(sf::TcpSocket* client, bool notify)
 {
 

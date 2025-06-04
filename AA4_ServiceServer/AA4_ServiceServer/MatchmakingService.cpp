@@ -1,32 +1,37 @@
-// ------- Archivo: MatchmakingService.cpp -------
+
 
 #include "MatchmakingService.h"
 #include <iostream>
-#include <optional> // Asegúrate de que está incluido si usas std::optional
+#include <optional> 
 
-// Estas variables estáticas deben estar definidas en el .cpp
+
+
 static unsigned short next_game_client_udp_port_val = 57000; // Puerto UDP inicial para clientes en partida
 static std::mutex port_assignment_mutex_val; // Mutex para proteger la asignación del puerto
 
-// Implementación del método de la clase
+
+
+// Obtiene el siguiente puerto UDP disponible de la secuencia.
 unsigned short MatchmakingService::assignNextGameClientUdpPort() {
-    std::lock_guard<std::mutex> lock(port_assignment_mutex_val); // Usar el mutex miembro de la clase si se prefiere o el estático
+    std::lock_guard<std::mutex> lock(port_assignment_mutex_val); 
     unsigned short assigned_port = next_game_client_udp_port_val;
     next_game_client_udp_port_val++;
-    // Simple wrap-around para los puertos (ajusta el rango según necesidad)
-    if (next_game_client_udp_port_val > 57100) { // Ejemplo de rango
+    
+    if (next_game_client_udp_port_val > 57100) { 
         next_game_client_udp_port_val = 57000;
     }
     return assigned_port;
 }
 
+// Crea un ID de sala único simple (e.g., "ds_room_0", "ds_room_1").
 std::string MatchmakingService::generateRoomId() {
-    static int room_counter = 0; // Contador estático para IDs únicos de sala
+    static int room_counter = 0; 
     std::ostringstream oss;
     oss << "ds_room_" << room_counter++;
     return oss.str();
 }
 
+//Establece (o restablece) la conexión TCP con el puerto de administración del DedicatedServer.
 bool MatchmakingService::connectToDedicatedServerAdmin() {
     // Si ya hay una conexión activa, desconectar primero
     if (dedicated_server_admin_socket.getRemoteAddress() != sf::IpAddress::Any && dedicated_server_admin_socket.getRemoteAddress().has_value()) {
@@ -46,7 +51,7 @@ bool MatchmakingService::connectToDedicatedServerAdmin() {
         return false;
     }
     std::cout << "[MatchmakingService] Conectado al puerto de admin del DedicatedServer." << std::endl;
-    dedicated_server_admin_socket.setBlocking(true); // Usualmente para control, es mejor bloqueante
+    dedicated_server_admin_socket.setBlocking(true); 
     return true;
 }
 
@@ -55,8 +60,9 @@ void MatchmakingService::attemptReconnectToDedicatedServerAdmin() {
     connectToDedicatedServerAdmin(); // Llama a la función de conexión
 }
 
+//Constructor.
 MatchmakingService::MatchmakingService(const ServerConfig& server_config)
-    : config(server_config) { // El launcher ya no es un miembro
+    : config(server_config) { 
     // Intenta conectar al iniciar el servicio
     if (!connectToDedicatedServerAdmin()) {
         std::cerr << "[MatchmakingService] Fallo inicial al conectar con el puerto admin del DS. Se reintentara mas tarde." << std::endl;
@@ -70,15 +76,13 @@ MatchmakingService::~MatchmakingService() {
     }
 }
 
+//Añade un cliente (que ya está LOGGED_IN) a la cola de matchmaking.
 void MatchmakingService::addClientToQueue(ClientSession& session, ServerTCP& tcpLayer) {
     if (session.state != ClientState::LOGGED_IN) {
         std::cerr << "[MatchmakingLogic] Jugador " << session.playerInfo.getNickName()
             << " intento entrar a matchmaking sin estar LOGGED_IN. Estado actual: "
             << static_cast<int>(session.state) << std::endl;
-        // Opcional: Enviar un error al cliente
-        // sf::Packet errorPacket;
-        // errorPacket << PacketType::S_ERROR_GENERAL << "Not logged in to request matchmaking.";
-        // tcpLayer.sendToClient(session.socket, errorPacket);
+      
         return;
     }
 
@@ -100,7 +104,7 @@ void MatchmakingService::addClientToQueue(ClientSession& session, ServerTCP& tcp
 
         if (!alreadyInQueue) {
             matchmakingQueue.push_back(session.socket);
-            session.state = ClientState::IN_MATCHMAKING_QUEUE; // Actualizar estado AHORA
+            session.state = ClientState::IN_MATCHMAKING_QUEUE; 
             added_to_actual_queue = true;
             std::cout << "[MatchmakingLogic] Jugador " << session.playerInfo.getNickName()
                 << " anadido a la lista de matchmaking. Total en cola: " << matchmakingQueue.size()
@@ -123,7 +127,7 @@ void MatchmakingService::addClientToQueue(ClientSession& session, ServerTCP& tcp
             std::cerr << "[MatchmakingLogic] Error enviando S_ADDED_TO_MATCHMAKING_QUEUE a "
                 << session.playerInfo.getNickName() << std::endl;
             // Si falla el envío, revertir el estado y quitarlo de la cola
-            session.state = ClientState::LOGGED_IN; // Revertir estado
+            session.state = ClientState::LOGGED_IN; 
             {
                 std::lock_guard<std::mutex> lock(queueMutex);
                 matchmakingQueue.remove(session.socket); // Quitar de la cola
@@ -134,12 +138,13 @@ void MatchmakingService::addClientToQueue(ClientSession& session, ServerTCP& tcp
     }
 }
 
+
+//Se llama periódicamente (desde Server::matchmakingThreadLoop) para comprobar si hay suficientes jugadores en la matchmakingQueue para formar una partida.
 void MatchmakingService::formMatches(std::unordered_map<sf::TcpSocket*, ClientSession>& clientSessionsMap, std::mutex& sessionsMutexRef, ServerTCP& tcpLayer) {
     std::lock_guard<std::mutex> lock(queueMutex); // Protege matchmakingQueue
 
     if (matchmakingQueue.size() < 2) {
-        // Este log puede ser muy frecuente, así que se puede comentar o hacer menos verboso
-        // std::cout << "[MatchmakingLogic::formMatches] No hay suficientes jugadores en cola (" << matchmakingQueue.size() << "). Necesarios 2." << std::endl;
+       
         return;
     }
 
@@ -155,7 +160,7 @@ void MatchmakingService::formMatches(std::unordered_map<sf::TcpSocket*, ClientSe
     ClientSession* session2 = nullptr;
 
     // Acceder al mapa de sesiones para obtener los objetos ClientSession
-    // Esto debe hacerse con el mutex que protege clientSessionsMap
+   
     {
         std::lock_guard<std::mutex> sessionsLock(sessionsMutexRef);
         auto it1 = clientSessionsMap.find(socket1_ptr);
@@ -181,17 +186,15 @@ void MatchmakingService::formMatches(std::unordered_map<sf::TcpSocket*, ClientSe
     // Verificar si se encontraron ambas sesiones
     if (!session1 || !session2) {
         std::cerr << "[MatchmakingLogic::formMatches] Error: Sesion no encontrada para uno o ambos sockets. No se forma la partida." << std::endl;
-        // Devolver a la cola solo si el socket es válido Y su sesión fue encontrada (indicando que aún estaba en el mapa)
-        // Si la sesión no se encontró, el cliente podría haberse desconectado y ServerTCP ya lo habría eliminado.
-        // No tiene sentido devolver un socket a la cola si ya no tiene una ClientSession asociada.
-        if (socket1_ptr && session1) matchmakingQueue.push_front(socket1_ptr); // Si se encontró sesión1, la devolvemos
-        else if (socket1_ptr) { /* No se encontró sesión1, no la devolvemos. El socket podría ser inválido o el cliente se desconectó.*/ }
+      
+        if (socket1_ptr && session1) matchmakingQueue.push_front(socket1_ptr);
+        else if (socket1_ptr) { }
 
-        if (socket2_ptr && session2) matchmakingQueue.push_front(socket2_ptr); // Si se encontró sesión2, la devolvemos
-        else if (socket2_ptr) { /* No se encontró sesión2 */ }
+        if (socket2_ptr && session2) matchmakingQueue.push_front(socket2_ptr); 
+        else if (socket2_ptr) {  }
 
-        if (session1 && session2) { // Ambos sockets tenían sesión pero uno era null, lo que es raro
-            // Esto no debería pasar si ambos eran no-null arriba
+        if (session1 && session2) {
+           
         }
         return;
     }
@@ -207,8 +210,7 @@ void MatchmakingService::formMatches(std::unordered_map<sf::TcpSocket*, ClientSe
             matchmakingQueue.push_front(socket1_ptr);
         }
         else {
-            // Si no estaba en cola pero la sesión existe, probablemente LOGGED_IN es un estado seguro.
-            // No cambiar si es MATCHED u otro estado avanzado.
+           
             if (session1->state != ClientState::MATCHED) session1->state = ClientState::LOGGED_IN;
         }
 
@@ -316,10 +318,7 @@ void MatchmakingService::formMatches(std::unordered_map<sf::TcpSocket*, ClientSe
     else {
         std::cerr << "[MatchmakingLogic::formMatches] Error enviando S_MATCH_FOUND a uno o ambos jugadores." << std::endl;
 
-        // Manejo de error: Si no se pudo notificar a un cliente, es una situación delicada.
-        // El DS ya fue notificado. Lo ideal sería tener un mecanismo para cancelar la sala en el DS.
-        // Como medida simple, revertimos los estados y los devolvemos a la cola.
-        // Esto puede dejar una sala "fantasma" en el DS si la notificación al DS tuvo éxito.
+       
 
         std::cout << "[MatchmakingLogic::formMatches] Error en envio a clientes. Revirtiendo. Jugadores seran devueltos a la cola." << std::endl;
 
@@ -327,14 +326,13 @@ void MatchmakingService::formMatches(std::unordered_map<sf::TcpSocket*, ClientSe
         session1->state = ClientState::IN_MATCHMAKING_QUEUE;
         session2->state = ClientState::IN_MATCHMAKING_QUEUE;
 
-        // Devolver a la cabeza de la cola para que se reintenten pronto (el orden importa)
+        // Devolver a la cabeza de la cola
         matchmakingQueue.push_front(socket2_ptr);
         matchmakingQueue.push_front(socket1_ptr);
 
         if (!sent1) std::cerr << "Fallo al enviar S_MATCH_FOUND a " << session1->playerInfo.getNickName() << std::endl;
         if (!sent2) std::cerr << "Fallo al enviar S_MATCH_FOUND a " << session2->playerInfo.getNickName() << std::endl;
 
-        // TODO (Avanzado): Implementar lógica para notificar al DS que cancele la sala new_room_id
-        // si la notificación a los clientes falla después de haber notificado al DS.
+       
     }
 }

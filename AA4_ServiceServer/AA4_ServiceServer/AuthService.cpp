@@ -14,7 +14,7 @@ AuthService::AuthService(DBManager& databaseManager) : dbManager(databaseManager
 // 'packet_type' es el tipo ya extraído (C_REQUEST_LOGIN o C_REQUEST_REGISTER).
 // 'packet_data' es el paquete SFML del cual extraer nickname y password.
 // Actualiza session.state y session.playerInfo en caso de éxito.
-// Envía la respuesta al cliente usando tcpLayer.
+// Envía la respuesta al cliente usando tcp.
 
 void AuthService::processAuthenticationRequest(PacketType packet_type, sf::Packet& packet_data, 
     ClientSession& session, ServerTCP& tcpLayer)

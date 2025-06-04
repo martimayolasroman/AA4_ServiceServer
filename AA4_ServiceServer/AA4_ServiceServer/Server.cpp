@@ -19,6 +19,7 @@ Server::~Server() {
     stop();
 }
 
+//Bucle principal de ejecución del servidor de servicios. Este método se ejecuta en su propio std::thread.
 void Server::run() {
     if (!dbManager.isConnected) {
         std::cerr << "[UnifiedServer] No es pot iniciar, la BBDD no esta connectada." << std::endl;
@@ -47,21 +48,22 @@ void Server::run() {
 
     while (server_running_flag) {
         serverTCP.update();
-        // Pequeña pausa para no consumir 100% CPU si el update es muy rápido
-        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        //// Pequeña pausa para no consumir 100% CPU si el update es muy rápido
+        //std::this_thread::sleep_for(std::chrono::milliseconds(1));
     }
 
     serverTCP.stopListener();
     std::cout << "[UnifiedServer] Listener TCP detingut." << std::endl;
 }
 
+// Inicia el proceso de detención del servidor
 void Server::stop() {
     if (!server_running_flag.exchange(false)) { // Prevenir múltiples llamadas a stop
         if (!matchmaking_running_flag.load()) return; // Si matchmaking ya está detenido, salir
     }
 
     std::cout << "[UnifiedServer] Iniciant proces de parada..." << std::endl;
-    // server_running_flag ya está en false.
+    
     matchmaking_running_flag = false;
 
     if (mmThread.joinable()) {
@@ -74,8 +76,8 @@ void Server::stop() {
 
      {
         std::lock_guard<std::mutex> lock(sessionsMutex);
-        clientSessions.clear(); // Los ClientSession se destruirán, pero los sf::TcpSocket* no se borran aquí
-        // ServerTCP debería ser el dueño de los sockets y borrarlos.
+        clientSessions.clear();
+       
     }
     if (dbManager.isConnected) {
         dbManager.disconnectDB();
@@ -83,6 +85,7 @@ void Server::stop() {
     std::cout << "[UnifiedServer] Proces de parada completat." << std::endl;
 }
 
+//Callback que se ejecuta cuando ServerTCP acepta una nueva conexión de cliente.
 void Server::handleClientConnected(sf::TcpSocket* clientSocket) {
     std::cout << "[UnifiedServer] Client connectat: " << clientSocket->getRemoteAddress().value_or(sf::IpAddress::Any).toString() << ":" << clientSocket->getRemotePort() << std::endl;
     ClientSession* session_ptr = nullptr;
@@ -96,23 +99,22 @@ void Server::handleClientConnected(sf::TcpSocket* clientSocket) {
 
     if (session_ptr) {
         
-       // std::cout << "[MatchmakingLogic] Enviando mapa a " << session.playerInfo.getNickName() << std::endl;
+      
         launcher.sendMapToClient(*session_ptr, serverTCP);
-        // El cliente ahora está en ClientState::CONNECTED por defecto.
-        // Cambiamos a AWAITING_CREDENTIALS directamente. No se envía mapa aquí.
+       
         session_ptr->state = ClientState::AWAITING_CREDENTIALS;
         std::cout << "[UnifiedServer] Client " << session_ptr->ipAddress.toString()
             << " canviat a AWAITING_CREDENTIALS." << std::endl;
     }
     else {
         std::cerr << "[UnifiedServer] Error critic: No s'ha pogut crear la sessio del client." << std::endl;
-        // ServerTCP debería manejar la desconexión y borrado del socket si la creación falla aquí
-        // o si nosotros mismos lo desconectamos.
+      
         clientSocket->disconnect();
-        // No borramos clientSocket aquí, ServerTCP lo hará en su limpieza si está en su lista.
+      
     }
 }
 
+//Callback que se ejecuta cuando ServerTCP detecta que un cliente se ha desconectado.
 void Server::handleClientDisconnected(sf::TcpSocket* clientSocket) {
     std::cout << "[UnifiedServer] Client desconnectat: " << clientSocket->getRemoteAddress().value_or(sf::IpAddress::Any).toString() << ":" << clientSocket->getRemotePort() << std::endl;
  
@@ -121,9 +123,11 @@ void Server::handleClientDisconnected(sf::TcpSocket* clientSocket) {
         std::lock_guard<std::mutex> lock(sessionsMutex);
         clientSessions.erase(clientSocket); // Elimina la sesión del mapa.
     }
-    // El sf::TcpSocket* es borrado por ServerTCP cuando lo elimina de su lista de clientes.
+    
 }
 
+
+//Callback que se ejecuta cuando ServerTCP recibe un paquete de un cliente
 void Server::processPacket(sf::TcpSocket* client, sf::Packet& packet) {
     ClientSession* session_ptr = nullptr;
     {
@@ -144,9 +148,7 @@ void Server::processPacket(sf::TcpSocket* client, sf::Packet& packet) {
     }
 
 
-    // std::cout << "[UnifiedServer] Paquet rebut de " << session_ptr->ipAddress.toString()
-    //           << " Tipus: " << static_cast<int>(type)
-    //           << " Estat actual del client: " << static_cast<int>(session_ptr->state) << std::endl;
+    
 
     switch (session_ptr->state) {
     case ClientState::AWAITING_CREDENTIALS:
@@ -162,7 +164,7 @@ void Server::processPacket(sf::TcpSocket* client, sf::Packet& packet) {
 
     case ClientState::LOGGED_IN:
         if (type == C_REQUEST_MATCHMAKING_FRIENDLY) {
-            // MatchmakingService se encargará de todo. No necesita más datos del paquete aquí.
+           
             matchmaking.addClientToQueue(*session_ptr, serverTCP);
         }
         else {
@@ -177,7 +179,7 @@ void Server::processPacket(sf::TcpSocket* client, sf::Packet& packet) {
             << ") de " << session_ptr->playerInfo.getNickName()
             << " que esta en estat " << static_cast<int>(session_ptr->state)
             << ". No s'esperen paquets TCP en aquest estat." << std::endl;
-        // No se esperan más paquetes TCP del cliente una vez está en cola o emparejado (para este servidor)
+       
         break;
 
     default:
@@ -190,6 +192,7 @@ void Server::processPacket(sf::TcpSocket* client, sf::Packet& packet) {
     }
 }
 
+// Bucle que se ejecuta en un hilo separado (mmThread) para periódicamente intentar formar partidas.
 void Server::matchmakingThreadLoop() {
     std::cout << "[UnifiedServer-MatchmakingThread] Iniciat." << std::endl;
     sf::Clock checkClock;

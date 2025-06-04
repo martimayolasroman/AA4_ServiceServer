@@ -6,6 +6,7 @@ LauncherService::LauncherService(const std::string& path) : mapFilePath(path)
 
 }
 
+//Lee el contenido del archivo del mapa y lo envía a un cliente específico.
 void LauncherService::sendMapToClient(ClientSession& session, ServerTCP& tcpLayer)
 {
 
