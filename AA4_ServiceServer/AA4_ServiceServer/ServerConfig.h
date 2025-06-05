@@ -17,8 +17,8 @@ struct ServerConfig {
 
     // Matchmaking
     std::string gameServerIp = "127.0.0.1"; //Ip server DEDICADO
-    unsigned short gameServerDefaultPort = 56000; // PUERTO SERVER DEDICADO
-    unsigned short gameServerDefaultPortTCPAdmin = 56001; //PUERTO SERVER DEDICADO PARA TCP
+    unsigned short gameServerDefaultPort = 55002; // PUERTO SERVER DEDICADO
+    unsigned short gameServerDefaultPortTCPAdmin = 55003; //PUERTO SERVER DEDICADO PARA TCP
     float matchmakingCheckInterval = 2.0f; // Segundos
 
    

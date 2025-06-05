@@ -17,8 +17,8 @@ unsigned short MatchmakingService::assignNextGameClientUdpPort() {
     unsigned short assigned_port = next_game_client_udp_port_val;
     next_game_client_udp_port_val++;
     
-    if (next_game_client_udp_port_val > 57100) { 
-        next_game_client_udp_port_val = 57000;
+    if (next_game_client_udp_port_val > 55100) {
+        next_game_client_udp_port_val = 55200;
     }
     return assigned_port;
 }
