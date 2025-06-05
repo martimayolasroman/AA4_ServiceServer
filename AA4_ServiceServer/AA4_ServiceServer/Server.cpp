@@ -26,6 +26,7 @@ void Server::run() {
         return;
     }
 
+    //--------------------  IA----------------
     serverTCP.setOnClientConnected([this](sf::TcpSocket* client) {
         this->handleClientConnected(client);
         });
@@ -35,6 +36,8 @@ void Server::run() {
     serverTCP.setOnPacketReceived([this](sf::TcpSocket* client, sf::Packet& packet) {
         this->processPacket(client, packet);
         });
+
+    //-------------------------------------------
 
     if (!serverTCP.startListener()) {
         std::cerr << "[UnifiedServer] No s'ha pogut iniciar el listener al port " << serverTCP.getPort() << std::endl;
