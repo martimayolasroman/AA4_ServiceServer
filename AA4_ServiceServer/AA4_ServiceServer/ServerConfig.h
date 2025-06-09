@@ -16,7 +16,7 @@ struct ServerConfig {
     std::string mapFilePath = "Data/map.txt"; // Ruta relativa al ejecutable
 
     // Matchmaking
-    std::string gameServerIp = "127.0.0.1"; //Ip server DEDICADO
+    std::string gameServerIp = "192.168.1.46"; //Ip server DEDICADO
     unsigned short gameServerDefaultPort = 55002; // PUERTO SERVER DEDICADO
     unsigned short gameServerDefaultPortTCPAdmin = 55003; //PUERTO SERVER DEDICADO PARA TCP
     float matchmakingCheckInterval = 2.0f; // Segundos

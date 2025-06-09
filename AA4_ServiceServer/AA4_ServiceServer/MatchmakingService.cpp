@@ -6,7 +6,7 @@
 
 
 
-static unsigned short next_game_client_udp_port_val = 57000; // Puerto UDP inicial para clientes en partida
+static unsigned short next_game_client_udp_port_val = 55100; // Puerto UDP inicial para clientes en partida
 static std::mutex port_assignment_mutex_val; // Mutex para proteger la asignación del puerto
 
 
@@ -17,8 +17,8 @@ unsigned short MatchmakingService::assignNextGameClientUdpPort() {
     unsigned short assigned_port = next_game_client_udp_port_val;
     next_game_client_udp_port_val++;
     
-    if (next_game_client_udp_port_val > 55100) {
-        next_game_client_udp_port_val = 55200;
+    if (next_game_client_udp_port_val > 55200) {
+        next_game_client_udp_port_val = 55100;
     }
     return assigned_port;
 }
